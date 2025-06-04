@@ -1,0 +1,29 @@
+{
+  "name": "wws-apartment-finder-server",
+  "version": "1.0.0",
+  "description": "Backend server for WWS Apartment Finder",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:setup": "node src/database/setup.js"
+  },
+  "keywords": [
+    "real estate",
+    "apartments",
+    "wws",
+    "node",
+    "express"
+  ],
+  "author": "WWS Apartment Finder Team",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

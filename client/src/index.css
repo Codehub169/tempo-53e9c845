@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts specified in design system */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
+
+body {
+  @apply font-primary text-text-dark bg-white;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apply secondary font to headings by default, can be overridden by Chakra UI styles */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-secondary;
+}
+
+/* Basic link styling - Chakra UI's Link component will offer more control */
+a {
+  @apply text-primary;
+  text-decoration: none;
+}
+a:hover {
+  /* @apply text-blue-700; Example: darken primary or use a hover variant */
+  text-decoration: underline;
+}
+
+/* Custom classes for applying max-widths defined in tailwind.config.js 
+   These can be used with Chakra UI Box or other layout components, or directly.
+*/
+.max-w-container-main {
+  max-width: theme('maxWidth.container-main');
+}
+
+.max-w-container-detail {
+  max-width: theme('maxWidth.container-detail');
+}
+
+.max-w-container-form {
+  max-width: theme('maxWidth.container-form');
+}
+
+.max-w-container-header {
+  max-width: theme('maxWidth.container-header');
+}
+
+
+/* Global container utility if needed outside Chakra UI, centered with padding */
+.container-global {
+  width: 90%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem; /* Corresponds to theme.container.padding.DEFAULT */
+  padding-right: 1rem;
+}
+
+/* Custom scrollbar for a more modern look (optional, WebKit specific) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: theme('colors.secondary'); /* Uses #F8F9FA */
+}
+
+::-webkit-scrollbar-thumb {
+  background: theme('colors.primary'); /* Uses #007BFF */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0056b3; /* A darker shade of primary blue */
+}
