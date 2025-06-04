@@ -17,7 +17,6 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import { FaSearch, FaMapMarkerAlt } from 'react-icons/fa';
-import Layout from '../components/Layout';
 import ListingCard from '../components/ListingCard';
 import ApartmentFilter from '../components/ApartmentFilter';
 import { getListings } from '../services/api'; // Using mock API for now
@@ -60,9 +59,12 @@ const HomePage = () => {
           case 'price-asc': return a.price - b.price;
           case 'price-desc': return b.price - a.price;
           case 'wws-asc': return a.wwsPoints - b.wwsPoints;
-          case 'wws-desc': return b.wwsPoints - a.wwsPoints; // Added WWS desc
-          case 'newest': // Assuming higher ID is newer, or add a date field
-          default: return parseInt(b.id) - parseInt(a.id);
+          case 'wws-desc': return b.wwsPoints - a.wwsPoints;
+          case 'newest': // Assuming higher ID is newer, or add a date field like createdAt
+          default:
+            // Fallback to ID or a date field if available. Mock uses ID.
+            // Real API might return `createdAt` for more reliable sorting.
+            return (b.createdAt || b.id) > (a.createdAt || a.id) ? 1 : -1;
         }
       });
 
@@ -88,7 +90,7 @@ const HomePage = () => {
   };
 
   return (
-    <Layout>
+    <>
       {/* Hero Section */}
       <Box bg={heroBgColor} py={{ base: 12, md: 20 }}>
         <Container variant="main">
@@ -120,6 +122,7 @@ const HomePage = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 size="lg"
                 variant="filled"
+                focusBorderColor="brand.500"
               />
             </InputGroup>
             <Button 
@@ -137,7 +140,7 @@ const HomePage = () => {
       </Box>
 
       {/* Filters Section */}
-      <Box py={{ base: 8, md: 12 }}>
+      <Box py={{ base: 6, md: 10 }}> {/* Adjusted padding slightly for rhythm */}
         <Container variant="main">
           <ApartmentFilter 
             filters={filters} 
@@ -151,7 +154,7 @@ const HomePage = () => {
       <Container variant="main" pb={{ base: 12, md: 20 }}>
         <Flex justify="space-between" align="center" mb={8} wrap="wrap" gap={4}>
           <Heading as="h2" size="lg" fontFamily="heading">
-            {isLoading ? 'Woningen Laden...' : listings.length > 0 ? 'Recente Woningen' : 'Geen Woningen Gevonden'}
+            {isLoading ? 'Woningen Laden...' : listings.length > 0 ? `${listings.length} Woning${listings.length > 1 ? 'en' : ''} Gevonden` : 'Geen Woningen Gevonden'}
           </Heading>
           <Select 
             w={{ base: '100%', sm: 'auto' }} 
@@ -170,11 +173,11 @@ const HomePage = () => {
         </Flex>
 
         {isLoading ? (
-          <Center h="300px">
+          <Center minH="300px">
             <Spinner size="xl" color="brand.500" thickness="4px" />
           </Center>
         ) : listings.length === 0 ? (
-          <Center h="200px">
+          <Center minH="200px">
             <Text fontSize="xl" color="text.light">Pas uw zoekcriteria aan of probeer het later opnieuw.</Text>
           </Center>
         ) : (
@@ -185,7 +188,7 @@ const HomePage = () => {
           </SimpleGrid>
         )}
       </Container>
-    </Layout>
+    </>
   );
 };
 
