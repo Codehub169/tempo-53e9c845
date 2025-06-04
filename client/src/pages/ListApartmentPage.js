@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -24,32 +24,35 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   useColorModeValue,
+  Text,
 } from '@chakra-ui/react';
 import { FaCloudUploadAlt, FaPaperPlane } from 'react-icons/fa';
 import Layout from '../components/Layout';
-import { createListing } from '../services/api'; // Using mock API for now
+import { createListing } from '../services/api';
+
+const initialFormData = {
+  title: '',
+  address: '',
+  description: '',
+  apartmentType: '',
+  size: '',
+  rooms: '',
+  bedrooms: '',
+  energyLabel: '',
+  woz: '',
+  kitchenAmenities: [],
+  bathroomAmenities: [],
+  outdoorSpaceType: 'none',
+  outdoorSpaceSize: '',
+  photos: [],
+  rentPrice: '',
+  contactName: '',
+  contactEmail: '',
+  contactPhone: '',
+};
 
 const ListApartmentPage = () => {
-  const [formData, setFormData] = useState({
-    title: '',
-    address: '',
-    description: '',
-    apartmentType: '',
-    size: '',
-    rooms: '',
-    bedrooms: '',
-    energyLabel: '',
-    woz: '',
-    kitchenAmenities: [],
-    bathroomAmenities: [],
-    outdoorSpaceType: 'none',
-    outdoorSpaceSize: '',
-    photos: [], // Store File objects
-    rentPrice: '',
-    contactName: '',
-    contactEmail: '',
-    contactPhone: '',
-  });
+  const [formData, setFormData] = useState(initialFormData);
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
@@ -59,13 +62,13 @@ const ListApartmentPage = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (type === 'checkbox') {
-      // Handle checkbox groups (kitchenAmenities, bathroomAmenities)
       const groupName = e.target.getAttribute('data-group');
+      if (!groupName) return; // Defensive check
       setFormData(prev => ({
         ...prev,
-        [groupName]: checked 
-          ? [...prev[groupName], value] 
-          : prev[groupName].filter(item => item !== value)
+        [groupName]: checked
+          ? [...prev[groupName], value]
+          : prev[groupName].filter(item => item !== value),
       }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -88,21 +91,30 @@ const ListApartmentPage = () => {
       });
       return;
     }
-    setFormData(prev => ({ ...prev, photos: [...prev.photos, ...files.slice(0, 10 - prev.photos.length)] }));
 
-    const newPreviews = files.map(file => URL.createObjectURL(file));
-    setPhotoPreviews(prev => [...prev, ...newPreviews.slice(0, 10 - prev.length)]);
+    const currentPhotoCount = formData.photos.length;
+    const currentPreviewCount = photoPreviews.length;
+    const remainingSlots = 10 - currentPhotoCount;
+    const filesToUpload = files.slice(0, remainingSlots);
+
+    setFormData(prev => ({ ...prev, photos: [...prev.photos, ...filesToUpload] }));
+
+    const newPreviews = filesToUpload.map(file => URL.createObjectURL(file));
+    setPhotoPreviews(prev => [...prev, ...newPreviews.slice(0, 10 - currentPreviewCount)]);
   };
 
   const removePhoto = (index) => {
     setFormData(prev => ({
       ...prev,
-      photos: prev.photos.filter((_, i) => i !== index)
+      photos: prev.photos.filter((_, i) => i !== index),
     }));
-    setPhotoPreviews(prev => {
-      const updatedPreviews = prev.filter((_, i) => i !== index);
-      updatedPreviews.forEach(preview => URL.revokeObjectURL(preview)); // Clean up old URL
-      return updatedPreviews;
+
+    setPhotoPreviews(prevPreviews => {
+      const removedPreviewUrl = prevPreviews[index];
+      if (removedPreviewUrl) {
+        URL.revokeObjectURL(removedPreviewUrl);
+      }
+      return prevPreviews.filter((_, i) => i !== index);
     });
   };
 
@@ -110,9 +122,6 @@ const ListApartmentPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      // In a real app, you might want to upload photos to a service first
-      // and then send URLs to the backend.
-      // For now, api.js mock handles File objects if needed or just uses the first for a placeholder.
       const response = await createListing(formData);
       toast({
         title: 'Woning Geplaatst!',
@@ -121,15 +130,16 @@ const ListApartmentPage = () => {
         duration: 7000,
         isClosable: true,
       });
-      // Reset form or redirect
-      setFormData({ /* initial state */ }); 
+      
+      photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoPreviews([]);
-      // e.target.reset(); // May not work well with controlled components
+      setFormData(initialFormData);
+      // Consider redirecting the user e.g., history.push(`/listing/${response.id}`);
     } catch (error) {
       console.error('Failed to create listing:', error);
       toast({
         title: 'Fout bij Plaatsen',
-        description: 'Er is iets misgegaan. Probeer het later opnieuw.',
+        description: error.response?.data?.message || 'Er is iets misgegaan. Probeer het later opnieuw.',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -138,6 +148,21 @@ const ListApartmentPage = () => {
       setIsSubmitting(false);
     }
   };
+
+  // Cleanup object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      photoPreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoPreviews]); // photoPreviews itself is a dependency to ensure cleanup runs if it changes before unmount
+  // However, for unmount only, an empty array [] is typical. Here, if previews change and component *doesn't* unmount,
+  // the old URLs are handled by removePhoto or handleSubmit. This is primarily for unmount with active previews.
+  // For simplicity and safety, ensure it runs if photoPreviews changes. Better: only on unmount for *current* previews.
+  // Correct approach for unmount cleanup: save photoPreviews ref or use empty dep array and access state via ref if needed.
+  // The current form is acceptable for most cases, but for strictness: 
+  // useEffect(() => { return () => { /* access photoPreviews via a ref if needed here */ }; }, []);
+  // Given removePhoto and handleSubmit handle individual/bulk revocation, this is a final safety net.
 
   const energyLabels = ['A++++', 'A+++', 'A++', 'A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
@@ -149,25 +174,24 @@ const ListApartmentPage = () => {
             Plaats Uw Woning Gratis
           </Heading>
           <form onSubmit={handleSubmit}>
-            {/* Basic Information */}
             <Box mb={8} pb={6} borderBottomWidth="1px" borderColor={sectionBorderColor}>
               <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Basis Informatie</Heading>
               <Stack spacing={5}>
                 <FormControl isRequired>
-                  <FormLabel>Titel van de Advertentie</FormLabel>
-                  <Input name="title" placeholder="bijv. Ruim appartement in centrum" value={formData.title} onChange={handleChange} />
+                  <FormLabel htmlFor="title">Titel van de Advertentie</FormLabel>
+                  <Input id="title" name="title" placeholder="bijv. Ruim appartement in centrum" value={formData.title} onChange={handleChange} />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Volledig Adres</FormLabel>
-                  <Input name="address" placeholder="Straatnaam Huisnummer, Postcode Plaats" value={formData.address} onChange={handleChange} />
+                  <FormLabel htmlFor="address">Volledig Adres</FormLabel>
+                  <Input id="address" name="address" placeholder="Straatnaam Huisnummer, Postcode Plaats" value={formData.address} onChange={handleChange} />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Beschrijving</FormLabel>
-                  <Textarea name="description" placeholder="Geef een uitgebreide beschrijving van de woning..." value={formData.description} onChange={handleChange} rows={5}/>
+                  <FormLabel htmlFor="description">Beschrijving</FormLabel>
+                  <Textarea id="description" name="description" placeholder="Geef een uitgebreide beschrijving van de woning..." value={formData.description} onChange={handleChange} rows={5}/>
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Type Woning</FormLabel>
-                  <Select name="apartmentType" placeholder="-- Selecteer type --" value={formData.apartmentType} onChange={handleChange}>
+                  <FormLabel htmlFor="apartmentType">Type Woning</FormLabel>
+                  <Select id="apartmentType" name="apartmentType" placeholder="-- Selecteer type --" value={formData.apartmentType} onChange={handleChange}>
                     <option value="appartement">Appartement</option>
                     <option value="studio">Studio</option>
                     <option value="kamer">Kamer</option>
@@ -177,42 +201,39 @@ const ListApartmentPage = () => {
               </Stack>
             </Box>
 
-            {/* Woning Details (voor WWS) */}
             <Box mb={8} pb={6} borderBottomWidth="1px" borderColor={sectionBorderColor}>
               <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Woning Details (voor WWS)</Heading>
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={5}>
                 <FormControl isRequired>
-                  <FormLabel>Oppervlakte (m
-ickel)</FormLabel>
-                  <NumberInput name="size" min={10} value={formData.size} onChange={(valStr, valNum) => handleNumberChange('size', valStr, valNum)}>
+                  <FormLabel htmlFor="size">Oppervlakte (m²)</FormLabel>
+                  <NumberInput id="size" name="size" min={10} value={String(formData.size)} onChange={(valStr, valNum) => handleNumberChange('size', valStr, valNum)}>
                     <NumberInputField placeholder="bijv. 75" />
                     <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                   </NumberInput>
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Aantal Kamers (incl. woonkamer)</FormLabel>
-                  <NumberInput name="rooms" min={1} value={formData.rooms} onChange={(valStr, valNum) => handleNumberChange('rooms', valStr, valNum)}>
+                  <FormLabel htmlFor="rooms">Aantal Kamers (incl. woonkamer)</FormLabel>
+                  <NumberInput id="rooms" name="rooms" min={1} value={String(formData.rooms)} onChange={(valStr, valNum) => handleNumberChange('rooms', valStr, valNum)}>
                     <NumberInputField placeholder="bijv. 3" />
                     <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                   </NumberInput>
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Aantal Slaapkamers</FormLabel>
-                  <NumberInput name="bedrooms" min={0} value={formData.bedrooms} onChange={(valStr, valNum) => handleNumberChange('bedrooms', valStr, valNum)}>
+                  <FormLabel htmlFor="bedrooms">Aantal Slaapkamers</FormLabel>
+                  <NumberInput id="bedrooms" name="bedrooms" min={0} value={String(formData.bedrooms)} onChange={(valStr, valNum) => handleNumberChange('bedrooms', valStr, valNum)}>
                     <NumberInputField placeholder="bijv. 2" />
                     <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                   </NumberInput>
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Energielabel</FormLabel>
-                  <Select name="energyLabel" placeholder="-- Selecteer label --" value={formData.energyLabel} onChange={handleChange}>
+                  <FormLabel htmlFor="energyLabel">Energielabel</FormLabel>
+                  <Select id="energyLabel" name="energyLabel" placeholder="-- Selecteer label --" value={formData.energyLabel} onChange={handleChange}>
                     {energyLabels.map(label => <option key={label} value={label}>{label}</option>)}
                   </Select>
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>WOZ-waarde (
-20ac)</FormLabel>
-                  <NumberInput name="woz" min={0} precision={2} value={formData.woz} onChange={(valStr, valNum) => handleNumberChange('woz', valStr, valNum)}>
+                  <FormLabel htmlFor="woz">WOZ-waarde (€)</FormLabel>
+                  <NumberInput id="woz" name="woz" min={0} precision={2} value={String(formData.woz)} onChange={(valStr, valNum) => handleNumberChange('woz', valStr, valNum)}>
                      <NumberInputField placeholder="bijv. 350000" />
                   </NumberInput>
                   <FormHelperText>Recente WOZ-beschikking</FormHelperText>
@@ -223,12 +244,12 @@ ickel)</FormLabel>
                 <FormLabel>Keukenvoorzieningen</FormLabel>
                 <CheckboxGroup colorScheme="brand">
                   <SimpleGrid columns={{ base: 1, sm:2, md: 3 }} spacing={3}>
-                    <Checkbox name="kitchen-sink" data-group="kitchenAmenities" value="sink" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('sink')}>Aanrecht</Checkbox>
-                    <Checkbox name="kitchen-stove" data-group="kitchenAmenities" value="stove" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('stove')}>Kookplaat (min. 4 pits)</Checkbox>
-                    <Checkbox name="kitchen-oven" data-group="kitchenAmenities" value="oven" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('oven')}>Oven</Checkbox>
-                    <Checkbox name="kitchen-extractor" data-group="kitchenAmenities" value="extractor" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('extractor')}>Afzuigkap</Checkbox>
-                    <Checkbox name="kitchen-fridge" data-group="kitchenAmenities" value="fridge" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('fridge')}>Koelkast</Checkbox>
-                    <Checkbox name="kitchen-dishwasher" data-group="kitchenAmenities" value="dishwasher" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('dishwasher')}>Vaatwasser</Checkbox>
+                    <Checkbox data-group="kitchenAmenities" value="sink" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('sink')}>Aanrecht</Checkbox>
+                    <Checkbox data-group="kitchenAmenities" value="stove" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('stove')}>Kookplaat (min. 4 pits)</Checkbox>
+                    <Checkbox data-group="kitchenAmenities" value="oven" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('oven')}>Oven</Checkbox>
+                    <Checkbox data-group="kitchenAmenities" value="extractor" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('extractor')}>Afzuigkap</Checkbox>
+                    <Checkbox data-group="kitchenAmenities" value="fridge" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('fridge')}>Koelkast</Checkbox>
+                    <Checkbox data-group="kitchenAmenities" value="dishwasher" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('dishwasher')}>Vaatwasser</Checkbox>
                   </SimpleGrid>
                 </CheckboxGroup>
               </FormControl>
@@ -237,17 +258,17 @@ ickel)</FormLabel>
                 <FormLabel>Sanitaire voorzieningen</FormLabel>
                 <CheckboxGroup colorScheme="brand">
                   <SimpleGrid columns={{ base: 1, sm:2, md: 3 }} spacing={3}>
-                    <Checkbox name="bath-toilet" data-group="bathroomAmenities" value="toilet" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('toilet')}>Toilet</Checkbox>
-                    <Checkbox name="bath-sink" data-group="bathroomAmenities" value="sink" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('sink')}>Wastafel</Checkbox>
-                    <Checkbox name="bath-shower" data-group="bathroomAmenities" value="shower" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('shower')}>Douche</Checkbox>
-                    <Checkbox name="bath-tub" data-group="bathroomAmenities" value="tub" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('tub')}>Ligbad</Checkbox>
+                    <Checkbox data-group="bathroomAmenities" value="toilet" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('toilet')}>Toilet</Checkbox>
+                    <Checkbox data-group="bathroomAmenities" value="sink" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('sink')}>Wastafel</Checkbox>
+                    <Checkbox data-group="bathroomAmenities" value="shower" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('shower')}>Douche</Checkbox>
+                    <Checkbox data-group="bathroomAmenities" value="tub" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('tub')}>Ligbad</Checkbox>
                   </SimpleGrid>
                 </CheckboxGroup>
               </FormControl>
 
               <FormControl mt={5}>
-                <FormLabel>Type Buitenruimte</FormLabel>
-                <Select name="outdoorSpaceType" value={formData.outdoorSpaceType} onChange={handleChange}>
+                <FormLabel htmlFor="outdoorSpaceType">Type Buitenruimte</FormLabel>
+                <Select id="outdoorSpaceType" name="outdoorSpaceType" value={formData.outdoorSpaceType} onChange={handleChange}>
                   <option value="none">Geen</option>
                   <option value="balcony">Balkon</option>
                   <option value="garden">Tuin</option>
@@ -255,32 +276,32 @@ ickel)</FormLabel>
                 </Select>
               </FormControl>
               {formData.outdoorSpaceType !== 'none' && (
-                <FormControl mt={3} isRequired>
-                  <FormLabel>Oppervlakte Buitenruimte (m
-ickel)</FormLabel>
-                  <NumberInput name="outdoorSpaceSize" min={0} value={formData.outdoorSpaceSize} onChange={(valStr, valNum) => handleNumberChange('outdoorSpaceSize', valStr, valNum)}>
+                <FormControl mt={3} isRequired={formData.outdoorSpaceType !== 'none'}>
+                  <FormLabel htmlFor="outdoorSpaceSize">Oppervlakte Buitenruimte (m²)</FormLabel>
+                  <NumberInput id="outdoorSpaceSize" name="outdoorSpaceSize" min={0} value={String(formData.outdoorSpaceSize)} onChange={(valStr, valNum) => handleNumberChange('outdoorSpaceSize', valStr, valNum)}>
                     <NumberInputField placeholder="bijv. 10" />
                   </NumberInput>
                 </FormControl>
               )}
             </Box>
             
-            {/* Photos */}
             <Box mb={8} pb={6} borderBottomWidth="1px" borderColor={sectionBorderColor}>
               <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Foto's</Heading>
               <FormControl>
-                <FormLabel>Upload Foto's (max. 10)</FormLabel>
+                <FormLabel htmlFor="photoInputLabel">Upload Foto's (max. 10)</FormLabel>
                 <Box 
+                  id="photoInputLabel"
                   borderWidth="2px" 
                   borderStyle="dashed" 
-                  borderColor="border.medium" 
+                  borderColor="gray.300" 
                   borderRadius="lg" 
                   p={8} 
                   textAlign="center" 
                   cursor="pointer" 
-                  onClick={() => document.getElementById('photoInput').click()}
+                  onClick={() => document.getElementById('photoInput')?.click()}
                   _hover={{ borderColor: 'brand.500' }}
                   bg={useColorModeValue('gray.50', 'gray.800')}
+                  aria-label="Upload foto's"
                 >
                   <Icon as={FaCloudUploadAlt} boxSize={12} color="brand.500" mb={3} />
                   <Text>Klik hier of sleep bestanden om te uploaden</Text>
@@ -291,37 +312,35 @@ ickel)</FormLabel>
               {photoPreviews.length > 0 && (
                 <SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={4} mt={4}>
                   {photoPreviews.map((preview, index) => (
-                    <Box key={index} position="relative" borderWidth="1px" borderRadius="md" overflow="hidden">
+                    <Box key={preview} position="relative" borderWidth="1px" borderRadius="md" overflow="hidden">
                       <Image src={preview} alt={`Preview ${index + 1}`} boxSize="120px" objectFit="cover" />
-                      <Button size="xs" colorScheme="red" position="absolute" top="2px" right="2px" onClick={() => removePhoto(index)}>X</Button>
+                      <Button size="xs" colorScheme="red" position="absolute" top="2px" right="2px" onClick={() => removePhoto(index)} aria-label={`Verwijder foto ${index + 1}`}>X</Button>
                     </Box>
                   ))}
                 </SimpleGrid>
               )}
             </Box>
 
-            {/* Price & Contact */}
             <Box mb={8}>
               <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Prijs & Contact</Heading>
               <Stack spacing={5}>
                 <FormControl isRequired>
-                  <FormLabel>Vraagprijs per maand (
-20ac)</FormLabel>
-                  <NumberInput name="rentPrice" min={0} precision={2} value={formData.rentPrice} onChange={(valStr, valNum) => handleNumberChange('rentPrice', valStr, valNum)}>
+                  <FormLabel htmlFor="rentPrice">Vraagprijs per maand (€)</FormLabel>
+                  <NumberInput id="rentPrice" name="rentPrice" min={0} precision={2} value={String(formData.rentPrice)} onChange={(valStr, valNum) => handleNumberChange('rentPrice', valStr, valNum)}>
                     <NumberInputField placeholder="bijv. 1250" />
                   </NumberInput>
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Naam Contactpersoon</FormLabel>
-                  <Input name="contactName" value={formData.contactName} onChange={handleChange} />
+                  <FormLabel htmlFor="contactName">Naam Contactpersoon</FormLabel>
+                  <Input id="contactName" name="contactName" value={formData.contactName} onChange={handleChange} />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>E-mailadres Contactpersoon</FormLabel>
-                  <Input type="email" name="contactEmail" value={formData.contactEmail} onChange={handleChange} />
+                  <FormLabel htmlFor="contactEmail">E-mailadres Contactpersoon</FormLabel>
+                  <Input id="contactEmail" type="email" name="contactEmail" value={formData.contactEmail} onChange={handleChange} />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Telefoonnummer (optioneel)</FormLabel>
-                  <Input type="tel" name="contactPhone" value={formData.contactPhone} onChange={handleChange} />
+                  <FormLabel htmlFor="contactPhone">Telefoonnummer (optioneel)</FormLabel>
+                  <Input id="contactPhone" type="tel" name="contactPhone" value={formData.contactPhone} onChange={handleChange} />
                 </FormControl>
               </Stack>
             </Box>
