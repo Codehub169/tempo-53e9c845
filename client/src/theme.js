@@ -33,23 +33,43 @@ const theme = extendTheme({
       800: '#003166',
       900: '#001933',
     },
+    accent: { // Changed from direct color to scale, using projectColors.accent as base
+      50: '#eaf6ed',
+      100: '#c5e8d3',
+      200: '#a0dab9',
+      300: '#7bcd9f',
+      400: '#55c085',
+      500: projectColors.accent, // #28A745
+      600: '#208637', // Darker shade for hover etc.
+      700: '#186429',
+      800: '#10431b',
+      900: '#08210d',
+    },
     secondary: projectColors.secondary, // #F8F9FA
-    accent: projectColors.accent,       // #28A745
     textDark: projectColors.textDark,   // #343A40
     textLight: projectColors.textLight, // #6C757D
     borderColor: projectColors.borderColor, // #E9ECEF
     success: projectColors.feedback.success,
     warning: projectColors.feedback.warning,
     error: projectColors.feedback.error,
-    // You can extend Chakra's default gray scale or other scales if needed
-    // For example, to make projectColors.secondary the default 'gray.50' for backgrounds:
     gray: {
       50: projectColors.secondary, // #F8F9FA - for light backgrounds
       100: projectColors.borderColor, // #E9ECEF - for borders
-      // ... add other shades if necessary
       700: projectColors.textLight, // #6C757D
       800: projectColors.textDark, // #343A40
-    }
+    },
+    green: { // Mapping our accent green to Chakra's 'green' color scheme
+      50: '#eaf6ed',
+      100: '#c5e8d3',
+      200: '#a0dab9',
+      300: '#7bcd9f',
+      400: '#55c085',
+      500: projectColors.accent, // #28A745
+      600: '#208637',
+      700: '#186429',
+      800: '#10431b',
+      900: '#08210d',
+    },
   },
   fonts: {
     heading: `'Poppins', sans-serif`, // As per Design System
@@ -74,7 +94,6 @@ const theme = extendTheme({
           textDecoration: 'underline',
         },
       },
-      // Scrollbar styles from index.html preview, adapted for Chakra theme
       '::-webkit-scrollbar': {
         width: '10px',
       },
@@ -112,25 +131,20 @@ const theme = extendTheme({
         px: '15px',   // Default horizontal padding
       },
       variants: {
-        // Corresponds to: Aim for a max-width around 1400px for search/homepage
         main: {
           maxWidth: '1400px',
         },
-        // Corresponds to: 1300px for listing details
         detail: {
           maxWidth: '1300px',
         },
-        // Corresponds to: form page retaining a narrower max-width (around 800px)
         form: {
           maxWidth: '800px',
         },
-        // Corresponds to: header maintains consistent width across pages (using the widest common value)
         header: {
           maxWidth: '1400px',
         },
       },
     },
-    // Further component customizations can be added here, e.g., Card, Input, FormLabel
   },
 });
 

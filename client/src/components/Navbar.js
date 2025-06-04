@@ -31,14 +31,14 @@ const NavLink = ({ to, children, isButton, onClose }) => {
         as={RouterLink}
         to={to}
         variant="solid"
-        bg="accent.500"
+        bg="accent.500" // Uses accent scale from theme
         color="white"
         fontWeight="semibold"
         fontFamily="heading"
         px={6}
         py={3}
-        _hover={{ bg: 'accent.600' }}
-        onClick={onClose}
+        _hover={{ bg: 'accent.600' }} // Uses accent scale from theme
+        onClick={onClose} // Ensure drawer closes on button click
       >
         {children}
       </Button>
@@ -50,9 +50,9 @@ const NavLink = ({ to, children, isButton, onClose }) => {
       as={RouterLink}
       to={to}
       fontWeight={isActive ? 'bold' : 'medium'}
-      color={isActive ? 'brand.500' : 'text.dark'}
+      color={isActive ? 'brand.500' : 'textDark'} // Corrected: textDark from theme
       _hover={{ color: 'brand.500' }}
-      onClick={onClose}
+      onClick={onClose} // Ensure drawer closes on link click
       py={2}
       px={3}
       borderRadius="md"
@@ -78,7 +78,7 @@ const Navbar = () => {
       bg="white"
       py={3}
       borderBottomWidth="1px"
-      borderColor="border.light"
+      borderColor="borderColor" // Corrected: borderColor from theme
       position="sticky"
       top={0}
       zIndex="sticky"
@@ -110,7 +110,7 @@ const Navbar = () => {
             ml={10}
           >
             {navItems.map((item) => (
-              <NavLink key={item.path} to={item.path}>{item.label}</NavLink>
+              <NavLink key={item.path} to={item.path} onClose={onClose}>{item.label}</NavLink>
             ))}
           </HStack>
 
@@ -118,25 +118,26 @@ const Navbar = () => {
 
           <HStack spacing={4} alignItems="center">
             <Box display={{ base: 'none', md: 'block' }}>
-                <NavLink to="/list-apartment" isButton>Gratis Plaatsen</NavLink>
+                <NavLink to="/list-apartment" isButton onClose={onClose}>Gratis Plaatsen</NavLink>
             </Box>
             <IconButton
               aria-label="User profile"
               icon={<FaUserCircle size="24px" />}
               variant="ghost"
-              color="text.light"
+              color="textLight" // Corrected: textLight from theme
               _hover={{ color: 'brand.500' }}
               size="lg"
+              // onClick={() => { /* TODO: Implement user profile action */ }}
             />
           </HStack>
         </Flex>
       </Container>
 
       {/* Mobile Drawer */}
-      <Drawer isOpen={isOpen} placement="left" onClose={onClose">
+      <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
         <DrawerOverlay />
         <DrawerContent>
-          <DrawerHeader borderBottomWidth="1px" borderColor="border.light">
+          <DrawerHeader borderBottomWidth="1px" borderColor="borderColor"> {/* Corrected: borderColor from theme */}
             <Flex justify="space-between" align="center">
                 <Heading as="h2" size="md" color="brand.500" fontFamily="heading">
                     Menu
