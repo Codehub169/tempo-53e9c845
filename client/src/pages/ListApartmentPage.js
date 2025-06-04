@@ -16,7 +16,6 @@ import {
   Stack,
   Icon,
   Image,
-  // Flex, // Not used, removed
   useToast,
   NumberInput,
   NumberInputField,
@@ -24,28 +23,28 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   useColorModeValue,
-  Text,
+  Text as ChakraText, // Aliased to avoid conflict with Text from other imports if any
 } from '@chakra-ui/react';
 import { FaCloudUploadAlt, FaPaperPlane } from 'react-icons/fa';
-// Removed Layout import as it's handled globally
-import { createListing } from '../services/api';
+import { useApartments } from '../contexts/ApartmentContext';
+import { useNavigate } from 'react-router-dom';
 
 const initialFormData = {
   title: '',
   address: '',
   description: '',
   apartmentType: '',
-  size: '', // Will be stored as number
-  rooms: '', // Will be stored as number
-  bedrooms: '', // Will be stored as number
+  size: '',
+  rooms: '',
+  bedrooms: '',
   energyLabel: '',
-  woz: '', // Will be stored as number
+  woz: '',
   kitchenAmenities: [],
   bathroomAmenities: [],
   outdoorSpaceType: 'none',
-  outdoorSpaceSize: '', // Will be stored as number
-  photos: [], // Array of File objects
-  rentPrice: '', // Will be stored as number
+  outdoorSpaceSize: '',
+  photos: [], 
+  rentPrice: '',
   contactName: '',
   contactEmail: '',
   contactPhone: '',
@@ -54,8 +53,10 @@ const initialFormData = {
 const ListApartmentPage = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [photoPreviews, setPhotoPreviews] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // error from context is aliased to apiFormError to distinguish from other potential errors
+  const { createListing, loading: isSubmitting, error: apiFormError } = useApartments(); 
   const toast = useToast();
+  const navigate = useNavigate();
   const formBg = useColorModeValue('white', 'gray.700');
   const sectionBorderColor = useColorModeValue('gray.200', 'gray.600');
 
@@ -63,7 +64,7 @@ const ListApartmentPage = () => {
     const { name, value, type, checked } = e.target;
     if (type === 'checkbox') {
       const groupName = e.target.getAttribute('data-group');
-      if (!groupName) return; // Defensive check
+      if (!groupName) return;
       setFormData(prev => ({
         ...prev,
         [groupName]: checked
@@ -76,7 +77,6 @@ const ListApartmentPage = () => {
   };
 
   const handleNumberChange = (name, valueAsString, valueAsNumber) => {
-    // Store as number, or empty string if NaN (e.g. input cleared)
     setFormData(prev => ({ ...prev, [name]: isNaN(valueAsNumber) ? '' : valueAsNumber }));
   };
 
@@ -95,37 +95,35 @@ const ListApartmentPage = () => {
       return;
     }
 
-    const currentPhotoCount = formData.photos.length;
-    const remainingSlots = 10 - currentPhotoCount;
-    const filesToUpload = files.slice(0, remainingSlots);
+    // No need for currentPhotoCount and remainingSlots, photos are appended and total checked
+    const filesToUpload = files;
 
-    setFormData(prev => ({ ...prev, photos: [...prev.photos, ...filesToUpload] }));
+    setFormData(prev => ({ ...prev, photos: [...prev.photos, ...filesToUpload].slice(0, 10) }));
 
     const newPreviews = filesToUpload.map(file => URL.createObjectURL(file));
-    setPhotoPreviews(prev => [...prev, ...newPreviews]);
+    setPhotoPreviews(prev => [...prev, ...newPreviews].slice(0, 10));
   };
 
   const removePhoto = (index) => {
-    const newPhotos = formData.photos.filter((_, i) => i !== index);
-    setFormData(prev => ({ ...prev, photos: newPhotos }));
+    setFormData(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
 
-    const newPhotoPreviews = photoPreviews.filter((_, i) => i !== index);
     const removedPreviewUrl = photoPreviews[index];
     if (removedPreviewUrl) {
       URL.revokeObjectURL(removedPreviewUrl);
     }
-    setPhotoPreviews(newPhotoPreviews);
+    setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
     try {
-      // API expects File objects in formData.photos
       const response = await createListing(formData);
       toast({
         title: 'Woning Geplaatst!',
-        description: `Uw woning '${response.title}' is succesvol aangemeld.`,
+        description: `Uw woning '${response.title}' is succesvol aangemeld en wacht op goedkeuring.`,
         status: 'success',
         duration: 7000,
         isClosable: true,
@@ -134,35 +132,36 @@ const ListApartmentPage = () => {
       photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoPreviews([]);
       setFormData(initialFormData);
-      // Consider redirecting the user e.g., navigate(`/listing/${response.id}`);
-    } catch (error) {
-      console.error('Failed to create listing:', error);
+      navigate(`/listing/${response.id}`);
+    } catch (submissionError) { 
+      console.error('Failed to create listing:', submissionError);
       toast({
         title: 'Fout bij Plaatsen',
-        description: error.response?.data?.message || 'Er is iets misgegaan. Probeer het later opnieuw.',
+        description: submissionError.message || 'Er is iets misgegaan. Probeer het later opnieuw.',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   // Cleanup object URLs on component unmount
   useEffect(() => {
-    // This effect manages the cleanup of object URLs created for photo previews.
-    // It runs when `photoPreviews` changes or when the component unmounts.
-    const urlsToClean = [...photoPreviews]; // Capture the current list of URLs
+    const urlsToClean = [...photoPreviews]; // Capture current previews
     return () => {
       urlsToClean.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [photoPreviews]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only on mount and unmount for global cleanup
+
+  // Note: The useEffect for apiFormError was removed because handleSubmit
+  // already catches and toasts errors from createListing.
+  // If apiFormError was for other kinds of errors, it might be needed.
 
   const energyLabels = ['A++++', 'A+++', 'A++', 'A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
   return (
-    <Container variant="form" py={{ base: 6, md: 10 }}> {/* Adjusted padding */}
+    <Container variant="form" py={{ base: 6, md: 10 }}>
       <Box bg={formBg} p={{ base: 6, md: 10 }} borderRadius="xl" boxShadow="xl">
         <Heading as="h1" size="xl" fontFamily="heading" color="brand.500" textAlign="center" mb={8}>
           Plaats Uw Woning Gratis
@@ -199,7 +198,7 @@ const ListApartmentPage = () => {
             <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Woning Details (voor WWS)</Heading>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={5}>
               <FormControl isRequired>
-                <FormLabel htmlFor="size">Oppervlakte (m2)</FormLabel>
+                <FormLabel htmlFor="size">Oppervlakte (m²)</FormLabel>
                 <NumberInput id="size" name="size" min={10} value={formData.size} onChange={(valStr, valNum) => handleNumberChange('size', valStr, valNum)} focusBorderColor="brand.500">
                   <NumberInputField placeholder="bijv. 75" />
                   <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
@@ -226,8 +225,8 @@ const ListApartmentPage = () => {
                 </Select>
               </FormControl>
               <FormControl isRequired>
-                <FormLabel htmlFor="woz">WOZ-waarde (20ac)</FormLabel>
-                <NumberInput id="woz" name="woz" min={0} precision={2} value={formData.woz} onChange={(valStr, valNum) => handleNumberChange('woz', valStr, valNum)} focusBorderColor="brand.500">
+                <FormLabel htmlFor="woz">WOZ-waarde (€)</FormLabel>
+                <NumberInput id="woz" name="woz" min={0} precision={0} value={formData.woz} onChange={(valStr, valNum) => handleNumberChange('woz', valStr, valNum)} focusBorderColor="brand.500">
                    <NumberInputField placeholder="bijv. 350000" />
                 </NumberInput>
                 <FormHelperText>Recente WOZ-beschikking</FormHelperText>
@@ -236,26 +235,26 @@ const ListApartmentPage = () => {
             
             <FormControl mt={5}>
               <FormLabel>Keukenvoorzieningen</FormLabel>
-              <CheckboxGroup colorScheme="brand">
+              <CheckboxGroup colorScheme="brand" value={formData.kitchenAmenities}>
                 <SimpleGrid columns={{ base: 1, sm:2, md: 3 }} spacing={3}>
-                  <Checkbox data-group="kitchenAmenities" value="sink" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('sink')}>Aanrecht</Checkbox>
-                  <Checkbox data-group="kitchenAmenities" value="stove" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('stove')}>Kookplaat (min. 4 pits)</Checkbox>
-                  <Checkbox data-group="kitchenAmenities" value="oven" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('oven')}>Oven</Checkbox>
-                  <Checkbox data-group="kitchenAmenities" value="extractor" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('extractor')}>Afzuigkap</Checkbox>
-                  <Checkbox data-group="kitchenAmenities" value="fridge" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('fridge')}>Koelkast</Checkbox>
-                  <Checkbox data-group="kitchenAmenities" value="dishwasher" onChange={handleChange} isChecked={formData.kitchenAmenities.includes('dishwasher')}>Vaatwasser</Checkbox>
+                  <Checkbox data-group="kitchenAmenities" value="sink" onChange={handleChange}>Aanrecht</Checkbox>
+                  <Checkbox data-group="kitchenAmenities" value="stove" onChange={handleChange}>Kookplaat (min. 4 pits)</Checkbox>
+                  <Checkbox data-group="kitchenAmenities" value="oven" onChange={handleChange}>Oven</Checkbox>
+                  <Checkbox data-group="kitchenAmenities" value="extractor" onChange={handleChange}>Afzuigkap</Checkbox>
+                  <Checkbox data-group="kitchenAmenities" value="fridge" onChange={handleChange}>Koelkast</Checkbox>
+                  <Checkbox data-group="kitchenAmenities" value="dishwasher" onChange={handleChange}>Vaatwasser</Checkbox>
                 </SimpleGrid>
               </CheckboxGroup>
             </FormControl>
 
             <FormControl mt={5}>
               <FormLabel>Sanitaire voorzieningen</FormLabel>
-              <CheckboxGroup colorScheme="brand">
+              <CheckboxGroup colorScheme="brand" value={formData.bathroomAmenities}>
                 <SimpleGrid columns={{ base: 1, sm:2, md: 3 }} spacing={3}>
-                  <Checkbox data-group="bathroomAmenities" value="toilet" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('toilet')}>Toilet</Checkbox>
-                  <Checkbox data-group="bathroomAmenities" value="sink" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('sink')}>Wastafel</Checkbox>
-                  <Checkbox data-group="bathroomAmenities" value="shower" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('shower')}>Douche</Checkbox>
-                  <Checkbox data-group="bathroomAmenities" value="tub" onChange={handleChange} isChecked={formData.bathroomAmenities.includes('tub')}>Ligbad</Checkbox>
+                  <Checkbox data-group="bathroomAmenities" value="toilet" onChange={handleChange}>Toilet</Checkbox>
+                  <Checkbox data-group="bathroomAmenities" value="sink" onChange={handleChange}>Wastafel</Checkbox>
+                  <Checkbox data-group="bathroomAmenities" value="shower" onChange={handleChange}>Douche</Checkbox>
+                  <Checkbox data-group="bathroomAmenities" value="tub" onChange={handleChange}>Ligbad</Checkbox>
                 </SimpleGrid>
               </CheckboxGroup>
             </FormControl>
@@ -271,7 +270,7 @@ const ListApartmentPage = () => {
             </FormControl>
             {formData.outdoorSpaceType !== 'none' && (
               <FormControl mt={3} isRequired={formData.outdoorSpaceType !== 'none'}>
-                <FormLabel htmlFor="outdoorSpaceSize">Oppervlakte Buitenruimte (m2)</FormLabel>
+                <FormLabel htmlFor="outdoorSpaceSize">Oppervlakte Buitenruimte (m²)</FormLabel>
                 <NumberInput id="outdoorSpaceSize" name="outdoorSpaceSize" min={0} value={formData.outdoorSpaceSize} onChange={(valStr, valNum) => handleNumberChange('outdoorSpaceSize', valStr, valNum)} focusBorderColor="brand.500">
                   <NumberInputField placeholder="bijv. 10" />
                 </NumberInput>
@@ -282,9 +281,9 @@ const ListApartmentPage = () => {
           <Box mb={8} pb={6} borderBottomWidth="1px" borderColor={sectionBorderColor}>
             <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Foto's</Heading>
             <FormControl>
-              <FormLabel htmlFor="photoInputLabel">Upload Foto's (max. 10)</FormLabel>
+              <FormLabel htmlFor="photoInputTrigger">Upload Foto's (max. 10)</FormLabel>
               <Box 
-                id="photoInputLabel"
+                id="photoInputTrigger"
                 borderWidth="2px" 
                 borderStyle="dashed" 
                 borderColor="gray.300" 
@@ -301,15 +300,15 @@ const ListApartmentPage = () => {
                 onKeyPress={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('photoInput')?.click(); }}
               >
                 <Icon as={FaCloudUploadAlt} boxSize={12} color="brand.500" mb={3} />
-                <Text>Klik hier of sleep bestanden om te uploaden</Text>
+                <ChakraText>Klik hier of sleep bestanden om te uploaden</ChakraText>
               </Box>
               <Input id="photoInput" type="file" multiple accept="image/*,.heic,.heif" onChange={handlePhotoChange} style={{ display: 'none' }} />
-              <FormHelperText>Voeg duidelijke foto's toe van alle ruimtes. Max. 10MB per foto.</FormHelperText>
+              <FormHelperText>Voeg duidelijke foto's toe van alle ruimtes. Max. 10MB per foto. Maximaal 10 foto's totaal.</FormHelperText>
             </FormControl>
             {photoPreviews.length > 0 && (
               <SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={4} mt={4}>
                 {photoPreviews.map((preview, index) => (
-                  <Box key={preview} position="relative" borderWidth="1px" borderRadius="md" overflow="hidden" boxShadow="sm">
+                  <Box key={index} position="relative" borderWidth="1px" borderRadius="md" overflow="hidden" boxShadow="sm">
                     <Image src={preview} alt={`Preview ${index + 1}`} boxSize="120px" objectFit="cover" />
                     <Button size="xs" colorScheme="red" position="absolute" top="1" right="1" onClick={() => removePhoto(index)} aria-label={`Verwijder foto ${index + 1}`}>X</Button>
                   </Box>
@@ -322,7 +321,7 @@ const ListApartmentPage = () => {
             <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Prijs & Contact</Heading>
             <Stack spacing={5}>
               <FormControl isRequired>
-                <FormLabel htmlFor="rentPrice">Vraagprijs per maand (20ac)</FormLabel>
+                <FormLabel htmlFor="rentPrice">Vraagprijs per maand (€)</FormLabel>
                 <NumberInput id="rentPrice" name="rentPrice" min={0} precision={2} value={formData.rentPrice} onChange={(valStr, valNum) => handleNumberChange('rentPrice', valStr, valNum)} focusBorderColor="brand.500">
                   <NumberInputField placeholder="bijv. 1250" />
                 </NumberInput>
@@ -349,12 +348,17 @@ const ListApartmentPage = () => {
             w="100%" 
             leftIcon={<FaPaperPlane />} 
             isLoading={isSubmitting}
-            disabled={isSubmitting}
+            disabled={isSubmitting || photoPreviews.length === 0} // Disable submit if no photos or submitting
             boxShadow="lg"
             _hover={{ boxShadow: 'xl', transform: 'translateY(-2px)'}}
           >
             Woning Plaatsen
           </Button>
+          {photoPreviews.length === 0 && (
+            <FormHelperText textAlign="center" color="red.500" mt={2}>
+              Voeg minimaal één foto toe om de woning te plaatsen.
+            </FormHelperText>
+          )}
         </form>
       </Box>
     </Container>
